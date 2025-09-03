@@ -138,6 +138,9 @@ if vim.fn.isdirectory(undodir) == 0 then
   vim.fn.mkdir(undodir, "p")
 end
 
+vim.opt.list = true
+vim.opt.listchars = { tab = "»-", trail = "·", nbsp = "␣" }
+
 -- ============================================
 -- USEFUL FUNCTIONS
 -- ============================================
@@ -464,7 +467,7 @@ vim.api.nvim_create_autocmd('FileType', {
 })
 
 vim.api.nvim_create_autocmd('FileType', {
-  pattern = 'c',
+  pattern = 'c,h',
   callback = setup_c_lsp,
   desc = 'Start C LSP'
 })
@@ -617,7 +620,7 @@ require("lazy").setup({
         -- dependencies = { "echasnovski/mini.icons" },
         opts = {},
         config = function()
-                vim.keymap.set("n", "<leader>ff", ":FzfLua<CR>")
+                vim.keymap.set("n", "<leader>ff", ":FzfLua files<CR>")
         end
     },
     {
@@ -628,6 +631,10 @@ require("lazy").setup({
                 terminal = false,
           })
           vim.cmd.colorscheme("ayu")
+          vim.cmd([[
+              highlight Cursor guifg=#ffffff guibg=#ff0000
+              highlight lCursor guifg=#ffffff guibg=#ff0000
+            ]])
        end,
     },
     {
