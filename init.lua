@@ -400,96 +400,120 @@ local function find_root(patterns)
   return root and vim.fn.fnamemodify(root, ':h') or path
 end
 
--- Shell LSP setup
-local function setup_shell_lsp()
-  vim.lsp.start({
-    name = 'bashls',
-    cmd = {'bash-language-server', 'start'},
-    filetypes = {'sh', 'bash', 'zsh'},
-    root_dir = find_root({'.git', 'Makefile'}),
-    settings = {
-      bashIde = {
-        globPattern = "*@(.sh|.inc|.bash|.command)"
-      }
+vim.lsp.config["bashls"] = {
+  cmd = {'bash-language-server', 'start'},
+  filetypes = {'sh', 'bash', 'zsh'},
+  root_dir = find_root({'.git', 'Makefile'}),
+  settings = {
+    bashIde = {
+      globPattern = "*@(.sh|.inc|.bash|.command)"
     }
-  })
-end
+  }
+}
 
--- Shell LSP setup
-local function setup_c_lsp()
-  vim.lsp.start({
-    name = 'clangd',
-    cmd = {'clangd'}, 
-    filetypes = {'c', 'h'},
-    root_dir = find_root({'.git', 'Makefile', '.tup'}),
-    settings = {
-        
-    }
-  })
-end
+vim.lsp.config["clangd"] = {
+  cmd = {'clangd', "-j=4", "--log=error", "--malloc-trim", "--clang-tidy",
+                  "--completion-style=detailed", "--background-index",
+                  "--pch-storage=memory", "--header-insertion=never",
+                  "--header-insertion-decorators=0" }, 
+  filetypes = {'cpp', 'hpp', 'c', 'h'},
+  root_dir = find_root({'.git', 'Makefile', '.tup'}),
+  settings = {}
+}
 
--- Python LSP setup
-local function setup_python_lsp()
-  vim.lsp.start({
-    name = 'pylsp',
-    cmd = {'pylsp'},
-    filetypes = {'python'},
-    root_dir = find_root({'pyproject.toml', 'setup.py', 'setup.cfg', 'requirements.txt', '.git'}),
-    settings = {
-      pylsp = {
-        plugins = { 
-          pycodestyle = {
-              enabled = false
-          },
-          flake8 = {
-              enabled = true,
-          },
-          black = { 
-              enabled = true
-          }
+vim.lsp.config["pylsp"] = {
+  cmd = {'pylsp'},
+  filetypes = {'python'},
+  root_dir = find_root({'pyproject.toml', 'setup.py', 'setup.cfg', 'requirements.txt', '.git', 'main.py', '__main__.py'}),
+  settings = {
+    pylsp = {
+      plugins = { 
+        pycodestyle = {
+            enabled = false
+        },
+        flake8 = {
+            enabled = true,
+        },
+        black = { 
+            enabled = true
         }
       }
     }
-  })
-end
+  }
+}
 
--- Auto-start LSPs based on filetype
-vim.api.nvim_create_autocmd('FileType', {
-  pattern = 'sh,bash,zsh',
-  callback = setup_shell_lsp,
-  desc = 'Start shell LSP'
+vim.lsp.config('lua_ls', {
+  on_init = function(client)
+    if client.workspace_folders then
+      local path = client.workspace_folders[1].name
+      if
+        path ~= vim.fn.stdpath('config')
+        and (vim.uv.fs_stat(path .. '/.luarc.json') or vim.uv.fs_stat(path .. '/.luarc.jsonc'))
+      then
+        return
+      end
+    end
+
+    client.config.settings.Lua = vim.tbl_deep_extend('force', client.config.settings.Lua, {
+      runtime = {
+        -- Tell the language server which version of Lua you're using (most
+        -- likely LuaJIT in the case of Neovim)
+        version = 'LuaJIT',
+        -- Tell the language server how to find Lua modules same way as Neovim
+        -- (see `:h lua-module-load`)
+        path = {
+          'lua/?.lua',
+          'lua/?/init.lua',
+        },
+      },
+      -- Make the server aware of Neovim runtime files
+      workspace = {
+        checkThirdParty = false,
+        library = {
+          vim.env.VIMRUNTIME
+          -- Depending on the usage, you might want to add additional paths
+          -- here.
+          -- '${3rd}/luv/library'
+          -- '${3rd}/busted/library'
+        }
+        -- Or pull in all of 'runtimepath'.
+        -- NOTE: this is a lot slower and will cause issues when working on
+        -- your own configuration.
+        -- See https://github.com/neovim/nvim-lspconfig/issues/3189
+        -- library = {
+        --   vim.api.nvim_get_runtime_file('', true),
+        -- }
+      }
+    })
+  end,
+  settings = {
+    Lua = {}
+  }
 })
 
-vim.api.nvim_create_autocmd('FileType', {
-  pattern = 'python',
-  callback = setup_python_lsp,
-  desc = 'Start Python LSP'
-})
-
-vim.api.nvim_create_autocmd('FileType', {
-  pattern = 'c,h',
-  callback = setup_c_lsp,
-  desc = 'Start C LSP'
-})
+vim.lsp.enable("clangd")
+vim.lsp.enable("pylsp")
+vim.lsp.enable("bashls")
+vim.lsp.enable("lua_ls")
 
 -- formatting
 local function format_code()
   local bufnr = vim.api.nvim_get_current_buf()
   local filename = vim.api.nvim_buf_get_name(bufnr)
   local filetype = vim.bo[bufnr].filetype
-  
+
   -- Save cursor position
   local cursor_pos = vim.api.nvim_win_get_cursor(0)
-  
+
   if filetype == 'python' or filename:match('%.py$') then
     if filename == '' then
       print("Save the file first before formatting Python")
       return
     end
-    
+
     local black_cmd = "black --quiet " .. vim.fn.shellescape(filename)
     local black_result = vim.fn.system(black_cmd)
-    
+
     if vim.v.shell_error == 0 then
       vim.cmd('checktime')
       vim.api.nvim_win_set_cursor(0, cursor_pos)
@@ -598,6 +622,45 @@ end, { desc = 'Show LSP client info' })
 require("lazy").setup({
   spec = {
     -- add your plugins here
+    { "neovim/nvim-lspconfig" },
+    {
+        "hrsh7th/nvim-cmp",
+        dependencies = {
+            'hrsh7th/cmp-nvim-lsp',
+            'hrsh7th/cmp-buffer',
+            'hrsh7th/cmp-path',
+            'hrsh7th/cmp-cmdline',
+
+            'L3MON4D3/LuaSnip',
+            'saadparwaiz1/cmp_luasnip'
+        },
+        config = function()
+            local cmp = require("cmp")
+
+            cmp.setup({
+                snippet = {
+                  expand = function(args)
+                    require('luasnip').lsp_expand(args.body)
+                  end,
+                },
+                mapping = cmp.mapping.preset.insert({
+                    ['<C-n>'] = cmp.mapping.select_next_item({ behavior = cmp.SelectBehavior.Insert }),
+                    ['<C-p>'] = cmp.mapping.select_prev_item({ behavior = cmp.SelectBehavior.Insert }),
+                    ['<C-b>'] = cmp.mapping.scroll_docs(-4),
+                    ['<C-f>'] = cmp.mapping.scroll_docs(4),
+                    ['<C-Space>'] = cmp.mapping.complete(),
+                    ['<C-e>'] = cmp.mapping.abort(),
+                    ['<CR>'] = cmp.mapping.confirm({ select = true }),
+                }),
+                sources = cmp.config.sources({
+                  { name = 'nvim_lsp' },
+                  { name = 'vsnip' },
+                }, {
+                  { name = 'buffer' },
+                })
+              })
+        end
+    },
     {
         "windwp/nvim-autopairs",
         event = "InsertEnter",
