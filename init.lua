@@ -24,7 +24,7 @@ vim.opt.tabstop = 4
 vim.opt.shiftwidth = 4
 vim.opt.softtabstop = 4
 vim.opt.expandtab = true
-vim.opt.smartindent = true
+vim.opt.smartindent = false
 vim.opt.autoindent = true
 
 vim.opt.ignorecase = true
@@ -32,21 +32,21 @@ vim.opt.smartcase = true
 vim.opt.hlsearch = false
 vim.opt.incsearch = true
 
-vim.opt.termguicolors = true                       
-vim.opt.signcolumn = "yes"                         
-vim.opt.colorcolumn = "100"                        
-vim.opt.showmatch = true                           
-vim.opt.matchtime = 2                              
-vim.opt.cmdheight = 1                              
-vim.opt.completeopt = "menuone,noinsert,noselect"  
-vim.opt.showmode = false                           
-vim.opt.pumheight = 10                             
-vim.opt.pumblend = 10                              
-vim.opt.winblend = 0                               
-vim.opt.conceallevel = 0                           
-vim.opt.concealcursor = ""                         
-vim.opt.lazyredraw = true                          
-vim.opt.synmaxcol = 300                            
+vim.opt.termguicolors=true
+vim.opt.signcolumn="yes"
+vim.opt.colorcolumn="100"
+vim.opt.showmatch=true
+vim.opt.matchtime=2
+vim.opt.cmdheight=1
+vim.opt.completeopt="menuone,noinsert,noselect"
+vim.opt.showmode=false
+vim.opt.pumheight=10
+vim.opt.pumblend=10
+vim.opt.winblend=0
+vim.opt.conceallevel=0
+vim.opt.concealcursor=""
+vim.opt.lazyredraw=true
+vim.opt.synmaxcol=300
 
 vim.opt.backup = false                             -- Don't create backup files
 vim.opt.writebackup = false                        -- Don't create backup before writing
@@ -91,6 +91,7 @@ vim.keymap.set("n", "<C-d>", "<C-d>zz", { desc = "Half page down (centered)" })
 vim.keymap.set("n", "<C-u>", "<C-u>zz", { desc = "Half page up (centered)" })
 
 vim.keymap.set({ "n", "v" }, "<leader>d", '"_d', { desc = "Delete without yanking" })
+vim.keymap.set({ "n", "v" }, "<leader>dd", '"_dd', { desc = "Delete line without yanking" })
 
 vim.keymap.set("n", "<leader>bn", ":bnext<CR>", { desc = "Next buffer" })
 vim.keymap.set("n", "<leader>bp", ":bprevious<CR>", { desc = "Previous buffer" })
@@ -422,27 +423,6 @@ vim.lsp.config["clangd"] = {
   settings = {}
 }
 
-vim.lsp.config["pylsp"] = {
-  cmd = {'pylsp'},
-  filetypes = {'python'},
-  root_dir = find_root({'pyproject.toml', 'setup.py', 'setup.cfg', 'requirements.txt', '.git', 'main.py', '__main__.py'}),
-  settings = {
-    pylsp = {
-      plugins = { 
-        pycodestyle = {
-            enabled = false
-        },
-        flake8 = {
-            enabled = true,
-        },
-        black = { 
-            enabled = true
-        }
-      }
-    }
-  }
-}
-
 vim.lsp.config('lua_ls', {
   on_init = function(client)
     if client.workspace_folders then
@@ -492,10 +472,21 @@ vim.lsp.config('lua_ls', {
   }
 })
 
+vim.lsp.config('rust_analyzer', {
+  settings = {
+    ['rust-analyzer'] = {
+      diagnostics = {
+        enable = true;
+      }
+    }
+  }
+})
+
 vim.lsp.enable("clangd")
-vim.lsp.enable("pylsp")
 vim.lsp.enable("bashls")
 vim.lsp.enable("lua_ls")
+vim.lsp.enable("rust_analyzer")
+vim.lsp.enable("basedpyright")
 
 -- formatting
 local function format_code()
@@ -596,9 +587,9 @@ vim.diagnostic.config({
 vim.diagnostic.config({
   signs = {
     text = {
-      [vim.diagnostic.severity.ERROR] = "✗",
-      [vim.diagnostic.severity.WARN] = "⚠",
-      [vim.diagnostic.severity.INFO] = "ℹ",
+      [vim.diagnostic.severity.ERROR] = "🗣️",
+      [vim.diagnostic.severity.WARN] = "👀",
+      [vim.diagnostic.severity.INFO] = "👉",
       [vim.diagnostic.severity.HINT] = "💡",
     }
   }
@@ -721,6 +712,9 @@ require("lazy").setup({
                 callback = function() vim.treesitter.start() end,
           })
        end
+    },
+    {
+        'Vimjas/vim-python-pep8-indent'
     },
   }, -- specs
   -- Configure any other settings here. See the documentation for more details.
