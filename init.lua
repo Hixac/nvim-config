@@ -207,107 +207,6 @@ vim.api.nvim_create_autocmd("BufWritePre", {
 })
 
 -- ============================================================================
--- FLOATING TERMINAL
--- ============================================================================
-
--- terminal
-local terminal_state = {
-  buf = nil,
-  win = nil,
-  is_open = false
-}
-
-local function FloatingTerminal()
-  -- If terminal is already open, close it (toggle behavior)
-  if terminal_state.is_open and vim.api.nvim_win_is_valid(terminal_state.win) then
-    vim.api.nvim_win_close(terminal_state.win, false)
-    terminal_state.is_open = false
-    return
-  end
-
-  -- Create buffer if it doesn't exist or is invalid
-  if not terminal_state.buf or not vim.api.nvim_buf_is_valid(terminal_state.buf) then
-    terminal_state.buf = vim.api.nvim_create_buf(false, true)
-    -- Set buffer options for better terminal experience
-    vim.api.nvim_buf_set_option(terminal_state.buf, 'bufhidden', 'hide')
-  end
-
-  -- Calculate window dimensions
-  local width = math.floor(vim.o.columns * 0.8)
-  local height = math.floor(vim.o.lines * 0.8)
-  local row = math.floor((vim.o.lines - height) / 2)
-  local col = math.floor((vim.o.columns - width) / 2)
-
-  -- Create the floating window
-  terminal_state.win = vim.api.nvim_open_win(terminal_state.buf, true, {
-    relative = 'editor',
-    width = width,
-    height = height,
-    row = row,
-    col = col,
-    style = 'minimal',
-    border = 'rounded',
-  })
-
-  -- Set transparency for the floating window
-  vim.api.nvim_win_set_option(terminal_state.win, 'winblend', 0)
-
-  -- Set transparent background for the window
-  vim.api.nvim_win_set_option(terminal_state.win, 'winhighlight',
-    'Normal:FloatingTermNormal,FloatBorder:FloatingTermBorder')
-
-  -- Define highlight groups for transparency
-  vim.api.nvim_set_hl(0, "FloatingTermNormal", { bg = "none" })
-  vim.api.nvim_set_hl(0, "FloatingTermBorder", { bg = "none", })
-
-  -- Start terminal if not already running
-  local has_terminal = false
-  local lines = vim.api.nvim_buf_get_lines(terminal_state.buf, 0, -1, false)
-  for _, line in ipairs(lines) do
-    if line ~= "" then
-      has_terminal = true
-      break
-    end
-  end
-
-  if not has_terminal then
-    vim.fn.termopen(os.getenv("SHELL"))
-  end
-
-  terminal_state.is_open = true
-  vim.cmd("startinsert")
-
-  -- Set up auto-close on buffer leave 
-  vim.api.nvim_create_autocmd("BufLeave", {
-    buffer = terminal_state.buf,
-    callback = function()
-      if terminal_state.is_open and vim.api.nvim_win_is_valid(terminal_state.win) then
-        vim.api.nvim_win_close(terminal_state.win, false)
-        terminal_state.is_open = false
-      end
-    end,
-    once = true
-  })
-end
-
--- Function to explicitly close the terminal
-local function CloseFloatingTerminal()
-  if terminal_state.is_open and vim.api.nvim_win_is_valid(terminal_state.win) then
-    vim.api.nvim_win_close(terminal_state.win, false)
-    terminal_state.is_open = false
-  end
-end
-
--- Key mappings
-vim.keymap.set("n", "<leader>t", FloatingTerminal, { noremap = true, silent = true, desc = "Toggle floating terminal" })
-vim.keymap.set("t", "<Esc>", function()
-  if terminal_state.is_open then
-    vim.api.nvim_win_close(terminal_state.win, false)
-    terminal_state.is_open = false
-  end
-end, { noremap = true, silent = true, desc = "Close floating terminal from terminal mode" })
-
--- ============================================================================
 -- STATUSLINE
 -- ============================================================================
 
@@ -516,14 +415,14 @@ local function format_code()
       return
     end
   end
-  
+
   if filetype == 'sh' or filetype == 'bash' or filename:match('%.sh$') then
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     local content = table.concat(lines, '\n')
-    
+
     local cmd = {'shfmt', '-i', '2', '-ci', '-sr'}  -- 2 spaces, case indent, space redirects
     local result = vim.fn.system(cmd, content)
-    
+
     if vim.v.shell_error == 0 then
       local formatted_lines = vim.split(result, '\n')
       if formatted_lines[#formatted_lines] == '' then
@@ -538,7 +437,7 @@ local function format_code()
       return
     end
   end
-  
+
   print("No formatter available for " .. filetype)
 end
 
@@ -550,29 +449,36 @@ vim.keymap.set('n', '<leader>fm', format_code, { desc = 'Format file' })
 
 -- LSP keymaps 
 vim.api.nvim_create_autocmd('LspAttach', {
-  callback = function(event)
-    local opts = {buffer = event.buf}
+    callback = function(event)
+        local client = assert(vim.lsp.get_client_by_id(event.data.client_id))
+        if client.server_capabilities.inlayHintProvider then
+            vim.lsp.inlay_hint.enable(true, { bufnr = event.buf }) -- Enable for the specific buffer
+        end
 
-    -- Navigation
-    vim.keymap.set('n', 'gD', vim.lsp.buf.definition, opts)
-    vim.keymap.set('n', 'gs', vim.lsp.buf.declaration, opts)
-    vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
-    vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
+        local opts = {buffer = event.buf}
 
-    -- Information
-    vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
-    vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, opts)
+        -- Navigation
+        vim.keymap.set('n', 'gD', vim.lsp.buf.definition, opts)
+        vim.keymap.set('n', 'gs', vim.lsp.buf.declaration, opts)
+        vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
+        vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
 
-    -- Code actions
-    vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, opts)
-    vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, opts)
+        -- Information
+        vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
+        vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, opts)
 
-    -- Diagnostics
-    vim.keymap.set('n', '<leader>nd', vim.diagnostic.goto_next, opts)
-    vim.keymap.set('n', '<leader>pd', vim.diagnostic.goto_prev, opts)
-    vim.keymap.set('n', '<leader>d', vim.diagnostic.open_float, opts)
-    vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, opts)
-  end,
+        -- Code actions
+        vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, opts)
+        vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, opts)
+
+        -- Diagnostics
+        vim.keymap.set('n', '<leader>nd', vim.diagnostic.goto_next, opts)
+        vim.keymap.set('n', '<leader>pd', vim.diagnostic.goto_prev, opts)
+        vim.keymap.set('n', '<leader>d', vim.diagnostic.open_float, opts)
+        vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, opts)
+
+        vim.keymap.set('n', '<leader>rr', ':LspRestart<CR>')
+    end,
 })
 
 -- Better LSP UI
@@ -673,9 +579,10 @@ require("lazy").setup({
         dependencies = { "nvim-tree/nvim-web-devicons" },
         -- or if using mini.icons/mini.nvim
         -- dependencies = { "echasnovski/mini.icons" },
-        opts = {},
+        opts = { },
         config = function()
-                vim.keymap.set("n", "<leader>ff", ":FzfLua files<CR>")
+            vim.keymap.set("n", "<leader>ff", ":FzfLua files<CR>")
+            vim.keymap.set("n", "<leader>ls", ":FzfLua live_grep<CR>")
         end
     },
     {
@@ -716,10 +623,16 @@ require("lazy").setup({
     {
         'Vimjas/vim-python-pep8-indent'
     },
+    {
+        "lervag/vimtex",
+        lazy = false,
+        init = function()
+        end
+    },
   }, -- specs
   -- Configure any other settings here. See the documentation for more details.
   -- colorscheme that will be used when installing plugins.
   -- install = {  },
   -- automatically check for plugin updates
-  checker = { enabled = true },
+  checker = { enabled = false, notify = false },
 })
